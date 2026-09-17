@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Werewolf: เกมล่าปริศนามนุษย์หมาป่า</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Font: Sarabun -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        werewolf: {
+                            dark: '#0B0F19',
+                            card: '#161E2E',
+                            border: '#2A374A',
+                            accent: '#F59E0B',
+                            night: '#1E1B4B',
+                            day: '#0F172A',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #0B0F19;
+            color: #E2E8F0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        .glow-gold {
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+        }
+        .glow-blue {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+        }
+        .night-theme {
+            background: linear-gradient(to bottom, #090d16, #141b2d);
+        }
+        .day-theme {
+            background: linear-gradient(to bottom, #0f172a, #1e293b);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col min-h-screen overflow-x-hidden">
+
+    <div id="app" class="flex-1 flex flex-col h-full max-w-7xl mx-auto w-full p-3 sm:p-5">
+        <!-- Dynamic Application Shell inserted by JavaScript -->
+    </div>
+
+    <script>
+        const GAME_CODES = [
+            { code: "K9X2M7", used: false, player: null },
+            { code: "R4V8P1", used: false, player: null },
+            { code: "L3T9N5", used: false, player: null },
+            { code: "H6B1Y8", used: false, player: null },
+            { code: "Z7F4C2", used: false, player: null },
+            { code: "W2Q8D9", used: false, player: null },
+            { code: "J5X7G3", used: false, player: null },
+            { code: "M9K1L6", used: false, player: null },
+            { code: "T4N2V8", used: false, player: null },
+            { code: "P8H5Z1", used: false, player: null }
+        ];
+
+        let state = {
+            view: 'lobby_login', // 'lobby_login', 'waiting_room', 'role_screen', 'game_board', 'admin_panel', 'score_board', 'summary_screen'
+            currentUser: null, // { name: '', code: '', role: '', status: '', isReady: false }
+            players: [
+                { id: 1, name: "บอส (AI)", code: "BOT-A1", role: "werewolf", faction: "werewolf", status: "ยังมีชีวิต", isReady: true, isBot: true },
+                { id: 2, name: "มิน (AI)", code: "BOT-A2", role: "seer", faction: "villager", status: "ยังมีชีวิต", isReady: true, isBot: true },
+                { id: 3, name: "นนท์ (AI)", code: "BOT-A3", role: "doctor", faction: "villager", status: "ยังมีชีวิต", isReady: true, isBot: true },
+                { id: 4, name: "ฝน (AI)", code: "BOT-A4", role: "werewolf", faction: "werewolf", status: "ยังมีชีวิต", isReady: true, isBot: true },
+                { id: 5, name: "พีท (AI)", code: "BOT-A5", role: "villager", faction: "villager", status: "ยังมีชีวิต", isReady: true, isBot: true }
+            ],
+            gamePhase: 'waiting',
+            dayNumber: 1,
+            nightActions: { werewolfTarget: null, seerTarget: null, doctorTarget: null },
+            lastNightSummary: "ยินดีต้อนรับสู่เกม Werewolf (ประเทศไทย)",
+            adminPassword: "toy@2532", // Default password toy@2532
+            settings: {
+                aliveText: "ยังมีชีวิต",
+                deadText: "ออกจากเกมแล้ว",
+                showUnregisteredOnBoard: true,
+                winPoints: 10,
+                lossPoints: 0
+            },
+            scores: {},
+            modalMessage: null
+        };
+
+        function showModal(msg) {
+            state.modalMessage = msg;
+            render();
+        }
+
+        function closeModal() {
+            state.modalMessage = null;
+            render();
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            let html = '';
+
+            // Responsive Modal dialog
+            if (state.modalMessage) {
+                html += `
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div class="bg-werewolf-card border border-werewolf-border rounded-2xl p-5 sm:p-6 max-w-sm w-full glow-gold shadow-2xl">
+                        <div class="flex items-center space-x-3 mb-3 text-amber-400">
+                            <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+                            <h3 class="text-lg font-bold">แจ้งเตือนระบบ</h3>
+                        </div>
+                        <p class="text-gray-300 mb-5 text-sm leading-relaxed">${state.modalMessage}</p>
+                        <div class="flex justify-end">
+                            <button onclick="closeModal()" class="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-5 py-2.5 rounded-xl transition text-sm">
+                                ตกลง
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // Mobile-Friendly Header Navigation Bar
+            html += `
+            <header class="flex flex-col sm:flex-row justify-between items-center pb-3 mb-3 border-b border-werewolf-border gap-2">
+                <div class="flex items-center space-x-3 cursor-pointer w-full sm:w-auto justify-between sm:justify-start" onclick="goToLobby()">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 glow-gold">
+                            <i class="fa-solid fa-moon text-lg"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-lg sm:text-xl font-bold tracking-wider text-amber-400">WEREWOLF</h1>
+                            <p class="text-[10px] text-gray-400">เกมล่าปริศนามนุษย์หมาป่า</p>
+                        </div>
+                    </div>
+                    <div class="flex sm:hidden items-center space-x-2">
+                        <button onclick="openAdminLogin()" class="bg-slate-800 p-2 rounded-xl text-amber-400 border border-slate-700 text-xs" title="แอดมิน">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                        <button onclick="openScoreboard()" class="bg-slate-800 p-2 rounded-xl text-amber-400 border border-slate-700 text-xs" title="ตารางคะแนน">
+                            <i class="fa-solid fa-trophy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                    ${state.currentUser ? `
+                        <div class="bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl flex items-center space-x-2 text-xs">
+                            <span class="w-2 h-2 rounded-full ${state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}"></span>
+                            <span class="font-medium text-gray-200">${state.currentUser.name}</span>
+                            <span class="bg-slate-900 px-2 py-0.5 rounded text-amber-400 border border-slate-700">${state.currentUser.status}</span>
+                        </div>
+                    ` : `
+                        <div class="bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl text-xs text-amber-400">
+                            <i class="fa-solid fa-user-slash mr-1"></i> ยังไม่เข้าสู่ระบบ
+                        </div>
+                    `}
+                    
+                    <button onclick="openAdminLogin()" class="hidden sm:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-gray-300 px-3 py-1.5 rounded-xl text-xs transition items-center space-x-1">
+                        <i class="fa-solid fa-gear text-amber-400"></i>
+                        <span>ตั้งค่าผู้ดูแล</span>
+                    </button>
+                    
+                    <button onclick="openScoreboard()" class="hidden sm:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-gray-300 px-3 py-1.5 rounded-xl text-xs transition items-center space-x-1">
+                        <i class="fa-solid fa-trophy text-amber-400"></i>
+                        <span>ตารางคะแนน</span>
+                    </button>
+                </div>
+            </header>`;
+
+            // Render current screen view
+            if (state.view === 'lobby_login') {
+                html += renderLobbyLoginScreen();
+            } else if (state.view === 'waiting_room') {
+                html += renderWaitingRoomScreen();
+            } else if (state.view === 'role_screen') {
+                html += renderRoleScreen();
+            } else if (state.view === 'game_board') {
+                html += renderGameBoardScreen();
+            } else if (state.view === 'admin_panel') {
+                html += renderAdminPanelScreen();
+            } else if (state.view === 'score_board') {
+                html += renderScoreboardScreen();
+            } else if (state.view === 'summary_screen') {
+                html += renderSummaryScreen();
+            }
+
+            app.innerHTML = html;
+        }
+
+        function renderLobbyLoginScreen() {
+            const totalPlayersCount = state.players.length + (state.currentUser ? 1 : 0);
+            
+            return `
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start pb-6">
+                <!-- Left: Login Form & Card-Style Character Showcase Intro -->
+                <div class="lg:col-span-5 bg-werewolf-card border border-werewolf-border rounded-2xl p-4 sm:p-6 glow-blue flex flex-col justify-between">
+                    <div>
+                        <!-- Card-Style Character Showcase Reference Grid matching user image -->
+                        <div class="w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-3 mb-4 shadow-inner">
+                            <div class="text-[11px] text-amber-400 font-bold mb-2.5 tracking-wider flex items-center justify-between">
+                                <span class="flex items-center space-x-1"><i class="fa-solid fa-id-card"></i> <span>ตัวละครหลักในหมู่บ้าน</span></span>
+                                <span class="text-[9px] text-gray-400">4 บทบาทสำคัญ</span>
+                            </div>
+                            <div class="grid grid-cols-4 gap-2 overflow-x-auto pb-1">
+                                <!-- Card 1: หมาป่า -->
+                                <div class="bg-slate-950 border border-red-500/40 rounded-xl p-2 flex flex-col items-center text-center shadow-md">
+                                    <div class="text-[10px] font-bold text-amber-300 truncate w-full mb-1">หมาป่า</div>
+                                    <div class="w-full h-14 bg-red-950/40 rounded-lg border border-red-500/30 flex items-center justify-center text-xl mb-2">🐺</div>
+                                    <div class="w-full bg-amber-500/10 border border-amber-500/30 rounded py-1 text-[9px] text-amber-400 font-semibold truncate">คุมคืน</div>
+                                </div>
+                                <!-- Card 2: ผู้หยั่งรู้ -->
+                                <div class="bg-slate-950 border border-amber-500/40 rounded-xl p-2 flex flex-col items-center text-center shadow-md">
+                                    <div class="text-[10px] font-bold text-amber-300 truncate w-full mb-1">ผู้หยั่งรู้</div>
+                                    <div class="w-full h-14 bg-amber-950/40 rounded-lg border border-amber-500/30 flex items-center justify-center text-xl mb-2">👁️</div>
+                                    <div class="w-full bg-amber-500/10 border border-amber-500/30 rounded py-1 text-[9px] text-amber-400 font-semibold truncate">ส่องเป้า</div>
+                                </div>
+                                <!-- Card 3: หมอ -->
+                                <div class="bg-slate-950 border border-blue-500/40 rounded-xl p-2 flex flex-col items-center text-center shadow-md">
+                                    <div class="text-[10px] font-bold text-amber-300 truncate w-full mb-1">หมอ</div>
+                                    <div class="w-full h-14 bg-blue-950/40 rounded-lg border border-blue-500/30 flex items-center justify-center text-xl mb-2">🛡️</div>
+                                    <div class="w-full bg-amber-500/10 border border-amber-500/30 rounded py-1 text-[9px] text-amber-400 font-semibold truncate">ปกป้อง</div>
+                                </div>
+                                <!-- Card 4: ชาวบ้าน -->
+                                <div class="bg-slate-950 border border-emerald-500/40 rounded-xl p-2 flex flex-col items-center text-center shadow-md">
+                                    <div class="text-[10px] font-bold text-amber-300 truncate w-full mb-1">ชาวบ้าน</div>
+                                    <div class="w-full h-14 bg-emerald-950/40 rounded-lg border border-emerald-500/30 flex items-center justify-center text-xl mb-2">👤</div>
+                                    <div class="w-full bg-amber-500/10 border border-amber-500/30 rounded py-1 text-[9px] text-amber-400 font-semibold truncate">โหวต</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mb-4">
+                            <h2 class="text-xl sm:text-2xl font-bold text-white">เข้าสู่เกมหมาป่า</h2>
+                            <p class="text-xs text-gray-400 mt-0.5">กรอกชื่อย่อและรหัสประจำตัว 6 หลัก (เช่น 555KK5)</p>
+                        </div>
+
+                        <form onsubmit="handleLogin(event)" class="space-y-3">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-1">ชื่อย่อผู้เล่น</label>
+                                <input type="text" id="loginName" required placeholder="ระบุชื่อย่อของคุณ" 
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white focus:outline-none focus:border-amber-500 transition">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-1">รหัสประจำตัว 6 หลัก</label>
+                                <input type="text" id="loginCode" required maxlength="6" placeholder="เช่น 555KK5" 
+                                    class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-3 text-sm text-white font-mono uppercase tracking-widest focus:outline-none focus:border-amber-500 transition">
+                            </div>
+                            <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold py-3.5 rounded-xl transition shadow-lg glow-gold text-sm mt-1">
+                                <i class="fa-solid fa-right-to-bracket mr-2"></i> เข้าสู่เกม
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-gray-500 text-center">
+                        ระบบป้องกันความปลอดภัย 6 หลักมาตรฐาน
+                    </div>
+                </div>
+
+                <!-- Right: Public Player Status Board -->
+                <div class="lg:col-span-7 bg-werewolf-card border border-werewolf-border rounded-2xl p-4 sm:p-6 flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-users-rectangle text-amber-400 text-lg"></i>
+                            <h3 class="text-base sm:text-lg font-bold text-white">บอร์ดสถานะผู้เล่น (สาธารณะ)</h3>
+                        </div>
+                        <span class="text-[11px] bg-slate-800 px-2.5 py-1 rounded-full text-amber-400 border border-slate-700">
+                            ${totalPlayersCount} / 10 คน
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-3">ตรวจสอบรายชื่อและสถานะของผู้เล่นก่อนเข้าร่วมเกม</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 overflow-y-auto max-h-[360px] sm:max-h-[400px] pr-1">
+                        ${renderPublicPlayerList()}
+                    </div>
+
+                    <div class="mt-4 bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 text-xs text-gray-400 flex items-start space-x-2.5">
+                        <i class="fa-solid fa-circle-info text-amber-400 mt-0.5 text-sm"></i>
+                        <div>
+                            <span class="font-semibold text-gray-300">คำแนะนำ:</span> บอร์ดนี้จะอัปเดตสถานะผู้เล่นแบบเรียลไทม์โดยไม่มีการเปิดเผยข้อมูลบทบาทลับ
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderPublicPlayerList() {
+            let listHtml = '';
+            let allParticipants = [...state.players];
+            if (state.currentUser) {
+                allParticipants.push({
+                    name: state.currentUser.name,
+                    code: state.currentUser.code,
+                    status: state.currentUser.status,
+                    isCurrent: true
+                });
+            }
+
+            if (allParticipants.length === 0) {
+                return `<div class="col-span-2 text-center py-8 text-gray-500 text-xs">ยังไม่มีผู้เล่นในระบบ</div>`;
+            }
+
+            allParticipants.forEach((p, idx) => {
+                const isAlive = p.status === 'ยังมีชีวิต' || p.status === 'อยู่ในห้องรอ' || p.status === 'กำลังเล่น' || p.status === 'พร้อมแล้ว';
+                const statusColor = isAlive ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400';
+                const icon = isAlive ? 'fa-heart-pulse' : 'fa-skull';
+
+                listHtml += `
+                <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-amber-400">
+                            #${idx + 1}
+                        </div>
+                        <div>
+                            <div class="font-semibold text-gray-200 flex items-center space-x-1.5">
+                                <span>${p.name}</span>
+                                ${p.isCurrent ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded">คุณ</span>' : ''}
+                            </div>
+                            <div class="text-[10px] text-gray-400">รหัส: ${p.code || 'WLF-0' + (idx+1)}</div>
+                        </div>
+                    </div>
+                    <div class="px-2 py-0.5 rounded-lg border text-[11px] flex items-center space-x-1 ${statusColor}">
+                        <i class="fa-solid ${icon}"></i>
+                        <span>${p.status}</span>
+                    </div>
+                </div>`;
+            });
+
+            for (let i = allParticipants.length; i < 10; i++) {
+                if (state.settings.showUnregisteredOnBoard) {
+                    listHtml += `
+                    <div class="bg-slate-900/30 border border-slate-800/60 rounded-xl p-2.5 sm:p-3 flex items-center justify-between opacity-60 text-xs">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center font-bold text-gray-600">
+                                #${i + 1}
+                            </div>
+                            <div>
+                                <div class="font-semibold text-gray-500">ช่องว่างผู้เล่น</div>
+                                <div class="text-[10px] text-gray-600">รหัสว่าง</div>
+                            </div>
+                        </div>
+                        <div class="px-2 py-0.5 rounded-lg border border-slate-800 text-[11px] text-gray-500 bg-slate-900/50">
+                            <i class="fa-solid fa-clock mr-1"></i> รอเข้าร่วม
+                        </div>
+                    </div>`;
+                }
+            }
+
+            return listHtml;
+        }
+
+        function renderWaitingRoomScreen() {
+            const totalCount = state.players.length + 1;
+            const readyCount = state.players.filter(p => p.isReady).length + (state.currentUser.isReady ? 1 : 0);
+            const canStart = totalCount >= 6;
+
+            return `
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start pb-6">
+                <!-- Left: Controls -->
+                <div class="lg:col-span-5 bg-werewolf-card border border-werewolf-border rounded-2xl p-4 sm:p-6 glow-blue flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                            <div>
+                                <span class="bg-green-500/10 border border-green-500/30 text-green-400 px-2.5 py-1 rounded-xl text-[11px] font-semibold">
+                                    <i class="fa-solid fa-circle-check mr-1"></i> เข้าสู่เกมสำเร็จ
+                                </span>
+                                <h2 class="text-xl font-bold text-white mt-1.5">ห้องรอผู้เล่น</h2>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-extrabold text-amber-400">${totalCount}/10</div>
+                                <div class="text-[10px] text-gray-400">ผู้เล่นในห้อง</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 mb-4 text-xs">
+                            <div class="text-gray-400 mb-1">สถานะส่วนตัวของคุณ</div>
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-white text-sm">${state.currentUser.name}</span>
+                                <span class="px-2.5 py-0.5 rounded-lg font-semibold ${state.currentUser.isReady ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}">
+                                    ${state.currentUser.isReady ? 'พร้อมแล้ว' : 'ยังไม่พร้อม'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <button onclick="toggleReady()" class="w-full py-3.5 rounded-xl font-bold transition shadow-lg text-sm ${state.currentUser.isReady ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30' : 'bg-green-500 hover:bg-green-600 text-slate-950'}">
+                                <i class="fa-solid ${state.currentUser.isReady ? 'fa-xmark' : 'fa-check'} mr-2"></i>
+                                ${state.currentUser.isReady ? 'ยกเลิกสถานะพร้อม' : 'กดพร้อมเริ่มเกม'}
+                            </button>
+
+                            <button onclick="simulateAddBot()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-gray-300 py-2.5 rounded-xl text-xs font-medium transition">
+                                <i class="fa-solid fa-robot mr-1 text-amber-400"></i> เพิ่มผู้เล่น AI Bot ทดสอบห้อง
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-3 border-t border-slate-800 text-xs text-gray-400">
+                        ${canStart ? `<span class="text-green-400 font-semibold"><i class="fa-solid fa-circle-check mr-1"></i> ผู้เล่นครบ 6 คนแล้ว พร้อมเริ่มเกมเมื่อทุกคนกดพร้อม</span>` : `<span class="text-amber-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ต้องการผู้เล่นอย่างน้อย 6 คน (ปัจจุบัน ${totalCount} คน)</span>`}
+                    </div>
+                </div>
+
+                <!-- Right: Players Board -->
+                <div class="lg:col-span-7 bg-werewolf-card border border-werewolf-border rounded-2xl p-4 sm:p-6 flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-list-check text-amber-400 text-lg"></i>
+                            <h3 class="text-base sm:text-lg font-bold text-white">รายชื่อและความพร้อม</h3>
+                        </div>
+                        <span class="text-[11px] bg-slate-800 px-2.5 py-1 rounded-full text-gray-300 border border-slate-700">
+                            พร้อม: ${readyCount} / ${totalCount} คน
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-3">เกมเริ่มอัตโนมัติเมื่อผู้เล่นทุกคนกดพร้อมและมีจำนวนอย่างน้อย 6 คน</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 overflow-y-auto max-h-[360px] pr-1">
+                        <div class="bg-slate-900/90 border border-amber-500/40 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs shadow-md">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400">
+                                    คุณ
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-white">${state.currentUser.name}</div>
+                                    <div class="text-[10px] text-gray-400">รหัส: ${state.currentUser.code}</div>
+                                </div>
+                            </div>
+                            <div class="px-2 py-0.5 rounded-lg border text-[11px] font-semibold ${state.currentUser.isReady ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}">
+                                ${state.currentUser.isReady ? 'พร้อมแล้ว' : 'ยังไม่พร้อม'}
+                            </div>
+                        </div>
+
+                        ${state.players.map((p, idx) => `
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-gray-400">
+                                    #${idx + 1}
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-gray-200">${p.name}</div>
+                                    <div class="text-[10px] text-gray-400">รหัส: ${p.code}</div>
+                                </div>
+                            </div>
+                            <div class="px-2 py-0.5 rounded-lg border text-[11px] font-semibold ${p.isReady ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}">
+                                ${p.isReady ? 'พร้อมแล้ว' : 'ยังไม่พร้อม'}
+                            </div>
+                        </div>`).join('')}
+                    </div>
+
+                    <div class="mt-4 flex justify-end">
+                        <button onclick="forceStartGame()" class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 px-3.5 py-2 rounded-xl text-xs transition">
+                            <i class="fa-solid fa-bolt mr-1"></i> บังคับเริ่มเกมทันที (ทดสอบ)
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderRoleScreen() {
+            const role = state.currentUser.role;
+            let roleTitle = '', factionName = '', abilityDesc = '', howToUse = '', precautions = '', roleIcon = '', roleColor = '';
+
+            if (role === 'werewolf') {
+                roleTitle = 'มนุษย์หมาป่า (Werewolf)';
+                factionName = 'ฝ่ายมนุษย์หมาป่า (Evil)';
+                abilityDesc = 'ในเวลากลางคืนสามารถร่วมมือกับเพื่อนร่วมทีมหมาป่าเพื่อเลือกเหยื่อ 1 คนเพื่อกำจัด';
+                howToUse = 'เลือกคลิกที่รายชื่อผู้เล่นที่ต้องการล่าในเวลากลางคืน';
+                precautions = 'ในเวลากลางวันต้องทำตัวเนียนเป็นชาวบ้าน ห้ามให้ใครจับได้ว่าคุณคือหมาป่า!';
+                roleIcon = 'fa-wolf-pack-battalion';
+                roleColor = 'text-red-400 border-red-500/30 bg-red-500/10';
+            } else if (role === 'seer') {
+                roleTitle = 'ผู้หยั่งรู้ (Seer)';
+                factionName = 'ฝ่ายชาวบ้าน (Villager)';
+                abilityDesc = 'สามารถตรวจสอบผู้เล่น 1 คนในเวลากลางคืนเพื่อดูว่าเป้าหมายนั้นเป็นมนุษย์หมาป่าหรือไม่';
+                howToUse = 'เลือกผู้เล่นที่น่าสงสัย 1 คนในช่วงกลางคืน ระบบจะแจ้งผลการตรวจสอบให้คุณทราบทันที';
+                precautions = 'ข้อมูลนี้เป็นความลับ อย่าเปิดเผยตัวตนเร็วเกินไป ไม่งั้นคุณจะตกเป็นเป้าหมายของหมาป่า!';
+                roleIcon = 'fa-eye';
+                roleColor = 'text-amber-400 border-amber-500/30 bg-amber-500/10';
+            } else if (role === 'doctor') {
+                roleTitle = 'หมอ / ผู้พิทักษ์ (Doctor)';
+                factionName = 'ฝ่ายชาวบ้าน (Villager)';
+                abilityDesc = 'สามารถเลือกปกป้องผู้เล่น 1 คนในเวลากลางคืน หากเลือกตรงกับเป้าหมายของหมาป่า ผู้เล่นคนนั้นจะรอดชีวิต';
+                howToUse = 'คลิกเลือกผู้เล่นที่ต้องการปกป้องในเวลากลางคืน สามารถปกป้องตัวเองได้ตามการตั้งค่า';
+                precautions = 'การช่วยชีวิตคนสำคัญสามารถพลิกสถานการณ์ของเกมได้ จงวิเคราะห์ให้ดีว่าใครคือเป้าหมายหมาป่า';
+                roleIcon = 'fa-shield-halved';
+                roleColor = 'text-blue-400 border-blue-500/30 bg-blue-500/10';
+            } else {
+                roleTitle = 'ชาวบ้าน (Villager)';
+                factionName = 'ฝ่ายชาวบ้าน (Villager)';
+                abilityDesc = 'ไม่มีความสามารถพิเศษในเวลากลางคืน แต่มีพลังในการอภิปรายและลงคะแนนเสียงในเวลากลางวัน';
+                howToUse = 'ใช้การสังเกต การตั้งคำถาม และการจับพิรุธผู้เล่นคนอื่นร่วมกับเพื่อนร่วมหมู่บ้าน';
+                precautions = 'ระวังการกล่าวหาผู้บริสุทธิ์ สามัคคีคือพลังในการกำจัดหมาป่าออกจากหมู่บ้าน!';
+                roleIcon = 'fa-user-shield';
+                roleColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
+            }
+
+            return `
+            <div class="flex-1 max-w-xl mx-auto w-full flex flex-col justify-center py-4">
+                <div class="bg-werewolf-card border border-werewolf-border rounded-3xl p-5 sm:p-8 glow-gold shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-6 opacity-10 text-7xl sm:text-8xl text-amber-400 pointer-events-none">
+                        <i class="fa-solid ${roleIcon}"></i>
+                    </div>
+
+                    <div class="text-center mb-5">
+                        <span class="inline-block px-3 py-1 rounded-xl text-xs font-bold ${roleColor} border mb-2">
+                            ${factionName}
+                        </span>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold text-white">${roleTitle}</h2>
+                        <div class="mt-2 text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-xl inline-block">
+                            <i class="fa-solid fa-lock mr-1"></i> ข้อมูลนี้เป็นความลับ ห้ามให้ผู้เล่นอื่นเห็น
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 text-xs sm:text-sm text-gray-300 mb-6 bg-slate-900/70 p-4 sm:p-5 rounded-2xl border border-slate-800">
+                        <div>
+                            <span class="font-bold text-amber-400 block mb-0.5"><i class="fa-solid fa-star mr-1"></i> ความสามารถ:</span>
+                            <p>${abilityDesc}</p>
+                        </div>
+                        <div>
+                            <span class="font-bold text-amber-400 block mb-0.5"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> วิธีใช้:</span>
+                            <p>${howToUse}</p>
+                        </div>
+                        <div>
+                            <span class="font-bold text-amber-400 block mb-0.5"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ข้อควรระวัง:</span>
+                            <p>${precautions}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div class="text-xs text-gray-400 flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                            <span>สถานะ: กำลังเล่น</span>
+                        </div>
+                        <button onclick="enterGameMainBoard()" class="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold px-7 py-3 rounded-xl transition shadow-lg glow-gold text-sm">
+                            เข้าสู่สนามเกม <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderGameBoardScreen() {
+            const isNight = state.gamePhase === 'night';
+            const themeClass = isNight ? 'night-theme' : 'day-theme';
+            const totalPlayersCount = state.players.length + 1;
+            const aliveCount = [state.currentUser, ...state.players].filter(p => p.status === 'ยังมีชีวิต' || p.status === 'กำลังเล่น' || p.status === 'พร้อมแล้ว').length;
+
+            return `
+            <div class="flex-1 flex flex-col space-y-3 ${themeClass} p-3 sm:p-4 rounded-3xl border border-werewolf-border transition-all duration-500">
+                <!-- Top Status Bar -->
+                <div class="bg-werewolf-card/95 backdrop-blur border border-werewolf-border rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${isNight ? 'bg-indigo-900/40 border-indigo-500/40 text-indigo-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'} border flex items-center justify-center text-xl glow-gold">
+                                <i class="fa-solid ${isNight ? 'fa-moon' : 'fa-sun'}"></i>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-gray-400">วันที่ ${state.dayNumber}</div>
+                                <h3 class="text-sm sm:text-base font-bold text-white">
+                                    ${isNight ? '🌙 เวลากลางคืน (19:00 - 05:59)' : '☀️ เวลากลางวัน (06:00 - 18:59)'}
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
+                        <div class="bg-slate-900/80 border border-slate-700 px-3 py-1.5 rounded-xl text-center">
+                            <div class="text-[10px] text-gray-400">ช่วงปัจจุบัน</div>
+                            <div class="font-bold text-amber-400 text-xs">
+                                ${isNight ? 'ช่วงความมืด' : state.gamePhase === 'day_discussion' ? 'ช่วงอภิปราย' : 'ช่วงโหวต'}
+                            </div>
+                        </div>
+
+                        ${state.adminPassword ? `
+                        <button onclick="toggleDayNight()" title="สลับกลางวัน/กลางคืน" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 p-2.5 rounded-xl text-xs transition">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>` : ''}
+                    </div>
+                </div>
+
+                <!-- Main Grid Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1">
+                    <!-- Left Action Panel -->
+                    <div class="lg:col-span-5 bg-werewolf-card/95 backdrop-blur border border-werewolf-border rounded-2xl p-4 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3 pb-2.5 border-b border-slate-800 text-xs">
+                                <div class="flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                                    <span class="font-bold text-white">บทบาท: <span class="text-amber-400 uppercase">${state.currentUser.role}</span></span>
+                                </div>
+                                <span class="bg-slate-800 px-2.5 py-0.5 rounded-lg text-gray-300 border border-slate-700">
+                                    ${state.currentUser.status}
+                                </span>
+                            </div>
+
+                            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 mb-3">
+                                ${renderPhaseInstructions()}
+                            </div>
+
+                            <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-3 text-xs">
+                                <div class="font-bold text-amber-400 mb-1 flex items-center space-x-1">
+                                    <i class="fa-solid fa-scroll"></i>
+                                    <span>สรุปเหตุการณ์:</span>
+                                </div>
+                                <p class="text-gray-300 leading-relaxed text-[11px] sm:text-xs">${state.lastNightSummary}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 pt-2.5 border-t border-slate-800 text-[11px] text-gray-400 flex justify-between items-center">
+                            <span>ผู้เล่นรอด: ${aliveCount} / ${totalPlayersCount} คน</span>
+                            <span class="text-amber-400">Asia/Bangkok</span>
+                        </div>
+                    </div>
+
+                    <!-- Right Player Status Board -->
+                    <div class="lg:col-span-7 bg-werewolf-card/95 backdrop-blur border border-werewolf-border rounded-2xl p-4 flex flex-col h-full">
+                        <div class="flex items-center justify-between mb-3 text-xs">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-chess-board text-amber-400 text-base"></i>
+                                <h4 class="font-bold text-white">บอร์ดสถานะผู้เล่น</h4>
+                            </div>
+                            <span class="bg-slate-800 px-2.5 py-0.5 rounded-full text-gray-300 border border-slate-700">
+                                เรียลไทม์
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 overflow-y-auto max-h-[360px] pr-1">
+                            <div class="bg-slate-900/90 border border-amber-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                                <div class="flex items-center space-x-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400">
+                                        คุณ
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold text-white">${state.currentUser.name}</div>
+                                        <div class="text-[10px] text-gray-400">รหัส: ${state.currentUser.code}</div>
+                                    </div>
+                                </div>
+                                <div class="px-2 py-0.5 rounded-lg border text-[11px] font-semibold ${state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}">
+                                    <i class="fa-solid ${state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' ? 'fa-heart-pulse' : 'fa-skull'} mr-1"></i>
+                                    ${state.currentUser.status}
+                                </div>
+                            </div>
+
+                            ${state.players.map((p, idx) => {
+                                const isAlive = p.status === 'ยังมีชีวิต' || p.status === 'กำลังเล่น';
+                                const statusClass = isAlive ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400';
+                                const icon = isAlive ? 'fa-heart-pulse' : 'fa-skull';
+
+                                return `
+                                <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                                    <div class="flex items-center space-x-2.5">
+                                        <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-gray-400">
+                                            #${idx + 1}
+                                        </div>
+                                        <div>
+                                            <div class="font-semibold text-gray-200">${p.name}</div>
+                                            <div class="text-[10px] text-gray-400">สถานะ: ${p.status}</div>
+                                        </div>
+                                    </div>
+                                    <div class="px-2 py-0.5 rounded-lg border text-[11px] font-semibold ${statusClass}">
+                                        <i class="fa-solid ${icon} mr-1"></i> ${p.status}
+                                    </div>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderPhaseInstructions() {
+            const isAlive = state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' || state.currentUser.status === 'พร้อมแล้ว';
+            
+            if (!isAlive || state.currentUser.status === 'ออกจากเกมแล้ว' || state.currentUser.status === 'ตายแล้ว') {
+                return `
+                <div class="text-center py-4 bg-slate-950/40 rounded-xl border border-red-500/20">
+                    <div class="text-red-400 font-bold text-sm mb-1"><i class="fa-solid fa-skull mr-1.5"></i> คุณออกจากเกมแล้ว</div>
+                    <p class="text-xs text-gray-400">คุณไม่สามารถใช้ความสามารถหรือกดโหวตใดๆ ได้อีก แต่สามารถติดตามชมสถานะของเกมได้ตามปกติ</p>
+                </div>`;
+            }
+
+            if (state.gamePhase === 'night') {
+                if (state.currentUser.role === 'werewolf') {
+                    return `
+                    <div class="space-y-2.5 text-xs">
+                        <div class="text-red-400 font-bold"><i class="fa-solid fa-moon mr-1"></i> คืนนี้คุณคือหมาป่า เลือกเป้าหมายล่า:</div>
+                        <select id="nightTargetSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white">
+                            <option value="">-- เลือกผู้เล่นเป้าหมาย --</option>
+                            ${state.players.filter(p => p.status === 'ยังมีชีวิต').map(p => `<option value="${p.id}">${p.name} (${p.role === 'werewolf' ? 'เพื่อนหมาป่า' : 'เป้าหมาย'})</option>`).join('')}
+                        </select>
+                        <button onclick="submitNightAction('werewolf')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition">
+                            ยืนยันเป้าหมายการล่า
+                        </button>
+                    </div>`;
+                } else if (state.currentUser.role === 'seer') {
+                    return `
+                    <div class="space-y-2.5 text-xs">
+                        <div class="text-amber-400 font-bold"><i class="fa-solid fa-eye mr-1"></i> เลือกผู้เล่นเพื่อตรวจสอบว่าเป็นหมาป่าหรือไม่:</div>
+                        <select id="nightTargetSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white">
+                            <option value="">-- เลือกผู้เล่นตรวจสอบ --</option>
+                            ${state.players.filter(p => p.status === 'ยังมีชีวิต').map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                        </select>
+                        <button onclick="submitNightAction('seer')" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition">
+                            ยืนยันการตรวจสอบ
+                        </button>
+                    </div>`;
+                } else if (state.currentUser.role === 'doctor') {
+                    return `
+                    <div class="space-y-2.5 text-xs">
+                        <div class="text-blue-400 font-bold"><i class="fa-solid fa-shield-halved mr-1"></i> เลือกผู้เล่นที่คุณต้องการปกป้องในคืนนี้:</div>
+                        <select id="nightTargetSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white">
+                            <option value="">-- เลือกผู้เล่นปกป้อง --</option>
+                            <option value="self">ปกป้องตัวเอง (${state.currentUser.name})</option>
+                            ${state.players.filter(p => p.status === 'ยังมีชีวิต').map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                        </select>
+                        <button onclick="submitNightAction('doctor')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition">
+                            ยืนยันการปกป้อง
+                        </button>
+                    </div>`;
+                } else {
+                    return `
+                    <div class="text-center py-3 text-xs">
+                        <div class="text-gray-400 font-semibold mb-1"><i class="fa-solid fa-bed mr-1.5"></i> ชาวบ้านกำลังนอนหลับ...</div>
+                        <p class="text-[11px] text-gray-500">รอจนถึงรุ่งเช้า โปรดรอความเคลื่อนไหว</p>
+                    </div>`;
+                }
+            } else if (state.gamePhase === 'day_discussion') {
+                return `
+                <div class="space-y-2.5 text-xs">
+                    <div class="font-bold text-amber-400"><i class="fa-solid fa-comments mr-1"></i> ช่วงเวลาร่วมอภิปรายและจับพิรุธ</div>
+                    <p class="text-gray-300 text-[11px]">พูดคุย วิเคราะห์เบาะแส และหาตัวหมาป่าร่วมกับเพื่อนร่วมหมู่บ้าน</p>
+                    <button onclick="startVotePhase()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded-xl transition">
+                        เข้าสู่ช่วงลงคะแนนเสียงโหวต
+                    </button>
+                </div>`;
+            } else if (state.gamePhase === 'day_vote') {
+                return `
+                <div class="space-y-2.5 text-xs">
+                    <div class="font-bold text-red-400"><i class="fa-solid fa-check-to-slot mr-1"></i> เลือกผู้ต้องสงสัยเพื่อโหวตขับออกจากหมู่บ้าน:</div>
+                    <select id="voteTargetSelect" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white">
+                        <option value="">-- เลือกผู้เล่นที่ต้องการโหวต --</option>
+                        ${state.players.filter(p => p.status === 'ยังมีชีวิต').map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                    </select>
+                    <button onclick="submitVoteAction()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition">
+                        ยืนยันการลงคะแนนโหวต
+                    </button>
+                </div>`;
+            }
+            return '';
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const name = document.getElementById('loginName').value.trim();
+            const code = document.getElementById('loginCode').value.trim().toUpperCase();
+
+            const foundCode = GAME_CODES.find(c => c.code === code);
+            if (!foundCode) {
+                showModal("รหัสประจำตัว 6 หลักไม่ถูกต้อง! กรุณาตรวจสอบรหัสผู้เล่น");
+                return;
+            }
+            if (foundCode.used) {
+                showModal("รหัสประจำตัวนี้ถูกใช้งานแล้วในรอบเกมนี้! โปรดใช้รหัสอื่น");
+                return;
+            }
+
+            foundCode.used = true;
+            foundCode.player = name;
+
+            state.currentUser = {
+                name: name,
+                code: code,
+                role: null,
+                status: 'อยู่ในห้องรอ',
+                isReady: false,
+                score: 0
+            };
+
+            state.view = 'waiting_room';
+            render();
+        }
+
+        function toggleReady() {
+            state.currentUser.isReady = !state.currentUser.isReady;
+            state.currentUser.status = state.currentUser.isReady ? 'พร้อมแล้ว' : 'ยังไม่พร้อม';
+            checkAutoStart();
+            render();
+        }
+
+        function simulateAddBot() {
+            if (state.players.length >= 9) {
+                showModal("ผู้เล่นเต็มจำนวน 10 คนแล้ว!");
+                return;
+            }
+            const botId = state.players.length + 1;
+            const botNames = ["เดชา", "วิชัย", "สมชาย", "มานพ", "ก้อง", "ธีร์", "ชัย", "ปูรณ์"];
+            const randomName = botNames[state.players.length % botNames.length] + " (AI)";
+            
+            state.players.push({
+                id: botId + 10,
+                name: randomName,
+                code: `BOT-${botId}`,
+                role: "villager",
+                faction: "villager",
+                status: "ยังมีชีวิต",
+                isReady: true,
+                isBot: true
+            });
+            checkAutoStart();
+            render();
+        }
+
+        function checkAutoStart() {
+            const allPlayers = [state.currentUser, ...state.players];
+            const allReady = allPlayers.every(p => p.isReady);
+            if (allReady && allPlayers.length >= 6) {
+                 startGameProcess();
+            }
+        }
+
+        function forceStartGame() {
+            const total = state.players.length + 1;
+            if (total < 6) {
+                showModal("ต้องการผู้เล่นอย่างน้อย 6 คนจึงจะเริ่มเกมได้ (ปัจจุบันมี " + total + " คน)");
+                return;
+            }
+            startGameProcess();
+        }
+
+        function startGameProcess() {
+            const allParticipants = [state.currentUser, ...state.players];
+            const total = allParticipants.length;
+
+            let rolesPool = ['werewolf', 'werewolf', 'seer', 'doctor'];
+            while (rolesPool.length < total) {
+                rolesPool.push('villager');
+            }
+            rolesPool.sort(() => Math.random() - 0.5);
+
+            state.currentUser.role = rolesPool[0];
+            state.currentUser.status = 'กำลังเล่น';
+            
+            state.players.forEach((p, idx) => {
+                p.role = rolesPool[idx + 1];
+                p.status = 'ยังมีชีวิต';
+            });
+
+            state.gamePhase = 'night';
+            state.dayNumber = 1;
+            state.lastNightSummary = "เกมเริ่มต้นขึ้นแล้ว คืนแรกของหมู่บ้านอันเงียบสงบ...";
+            state.view = 'role_screen';
+            render();
+        }
+
+        function enterGameMainBoard() {
+            state.view = 'game_board';
+            render();
+        }
+
+        function submitNightAction(roleType) {
+            const isAlive = state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' || state.currentUser.status === 'พร้อมแล้ว';
+            if (!isAlive || state.currentUser.status === 'ออกจากเกมแล้ว' || state.currentUser.status === 'ตายแล้ว') {
+                showModal("คุณออกจากเกมแล้ว ไม่สามารถใช้ความสามารถได้!");
+                return;
+            }
+
+            const selectEl = document.getElementById('nightTargetSelect');
+            if (!selectEl || !selectEl.value) {
+                showModal("กรุณาเลือกเป้าหมายก่อนยืนยัน");
+                return;
+            }
+
+            const targetVal = selectEl.value;
+            if (roleType === 'werewolf') {
+                state.nightActions.werewolfTarget = targetVal;
+                showModal("คุณได้เลือกเป้าหมายการล่าในคืนนี้แล้ว");
+            } else if (roleType === 'seer') {
+                state.nightActions.seerTarget = targetVal;
+                const targetPlayer = state.players.find(p => p.id == targetVal);
+                const isWolf = targetPlayer && targetPlayer.role === 'werewolf';
+                showModal(`ผลการตรวจสอบของผู้หยั่งรู้: เป้าหมาย "${targetPlayer ? targetPlayer.name : 'ผู้เล่น'}" ${isWolf ? 'เป็นมนุษย์หมาป่า!' : 'ไม่ใช่มนุษย์หมาป่า'}`);
+            } else if (roleType === 'doctor') {
+                state.nightActions.doctorTarget = targetVal;
+                showModal("คุณได้เลือกปกป้องผู้เล่นเป้าหมายในคืนนี้เรียบร้อยแล้ว");
+            }
+
+            setTimeout(() => {
+                resolveNightPhase();
+            }, 1000);
+        }
+
+        function resolveNightPhase() {
+            const wolfTargetId = state.nightActions.werewolfTarget;
+            const docTargetId = state.nightActions.doctorTarget;
+
+            if (wolfTargetId) {
+                if (wolfTargetId === docTargetId) {
+                    state.lastNightSummary = "คืนที่ผ่านมา หมาป่าออกล่าเหยื่อ แต่หมอช่วยชีวิตไว้ทัน! ไม่มีผู้เสียชีวิต";
+                } else {
+                    const victim = state.players.find(p => p.id == wolfTargetId);
+                    if (victim) {
+                        victim.status = state.settings.deadText || 'ออกจากเกมแล้ว';
+                        state.lastNightSummary = `คืนที่ผ่านมา น่าสลดใจ "${victim.name}" ถูกมนุษย์หมาป่าจู่โจมและเสียชีวิต`;
+                    }
+                }
+            } else {
+                state.lastNightSummary = "คืนที่ผ่านมา สงบเรียบร้อย ไม่มีผู้เสียชีวิต";
+            }
+
+            state.gamePhase = 'day_discussion';
+            if (checkWinCondition()) return;
+            render();
+        }
+
+        function startVotePhase() {
+            state.gamePhase = 'day_vote';
+            render();
+        }
+
+        function submitVoteAction() {
+            const isAlive = state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' || state.currentUser.status === 'พร้อมแล้ว';
+            if (!isAlive || state.currentUser.status === 'ออกจากเกมแล้ว' || state.currentUser.status === 'ตายแล้ว') {
+                showModal("คุณออกจากเกมแล้ว ไม่สามารถลงคะแนนโหวตได้!");
+                return;
+            }
+
+            const selectEl = document.getElementById('voteTargetSelect');
+            if (!selectEl || !selectEl.value) {
+                showModal("กรุณาเลือกผู้เล่นที่ต้องการโหวต");
+                return;
+            }
+
+            const votedId = selectEl.value;
+            const votedPlayer = state.players.find(p => p.id == votedId);
+            
+            if (votedPlayer) {
+                votedPlayer.status = state.settings.deadText || 'ออกจากเกมแล้ว';
+                state.lastNightSummary = `ผลการลงคะแนนประจำวัน: ชาวบ้านลงมติขับไล่ "${votedPlayer.name}" ออกจากหมู่บ้านสำเร็จ`;
+            }
+
+            state.gamePhase = 'night';
+            state.dayNumber++;
+
+            if (checkWinCondition()) return;
+            render();
+        }
+
+        function toggleDayNight() {
+            if (state.gamePhase === 'night') {
+                state.gamePhase = 'day_discussion';
+                state.lastNightSummary = "ผู้ดูแลสลับเวลาเป็นกลางวันทันที";
+            } else {
+                state.gamePhase = 'night';
+                state.lastNightSummary = "ผู้ดูแลสลับเวลาเป็นกลางคืนทันที";
+            }
+            render();
+        }
+
+        function checkWinCondition() {
+            const allAlive = [state.currentUser, ...state.players].filter(p => p.status === 'ยังมีชีวิต' || p.status === 'กำลังเล่น' || p.status === 'พร้อมแล้ว');
+            const aliveWolves = allAlive.filter(p => p.role === 'werewolf');
+            const aliveVillagers = allAlive.filter(p => p.role !== 'werewolf');
+
+            if (aliveWolves.length === 0) {
+                endGame("ฝ่ายชาวบ้านชนะ! กำจัดมนุษย์หมาป่าทั้งหมดได้สำเร็จ", "villager");
+                return true;
+            } else if (aliveWolves.length >= aliveVillagers.length) {
+                endGame("ฝ่ายมนุษย์หมาป่าชนะ! จำนวนหมาป่าเท่ากับหรือมากกว่าชาวบ้าน", "werewolf");
+                return true;
+            }
+            return false;
+        }
+
+        function endGame(summaryText, winningFaction) {
+            state.lastNightSummary = summaryText;
+            state.gamePhase = 'ended';
+
+            const isUserWinner = (state.currentUser.role === 'werewolf' && winningFaction === 'werewolf') || 
+                                 (state.currentUser.role !== 'werewolf' && winningFaction === 'villager');
+
+            if (!state.scores[state.currentUser.code]) {
+                state.scores[state.currentUser.code] = { name: state.currentUser.name, totalScore: 0, wins: 0, played: 0 };
+            }
+            state.scores[state.currentUser.code].played++;
+            if (isUserWinner) {
+                state.scores[state.currentUser.code].wins++;
+                state.scores[state.currentUser.code].totalScore += state.settings.winPoints;
+                state.currentUser.finalResult = "ชนะ";
+            } else {
+                state.scores[state.currentUser.code].totalScore += state.settings.lossPoints;
+                state.currentUser.finalResult = "แพ้";
+            }
+
+            state.view = 'summary_screen';
+            render();
+        }
+
+        function renderSummaryScreen() {
+            return `
+            <div class="flex-1 max-w-xl mx-auto w-full flex flex-col justify-center py-4">
+                <div class="bg-werewolf-card border border-werewolf-border rounded-3xl p-5 sm:p-8 glow-gold shadow-2xl text-center">
+                    <div class="inline-flex p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/30 text-amber-400 mb-3 text-3xl glow-gold">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+
+                    <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-1.5">สรุปผลการแข่งขัน</h2>
+                    <p class="text-amber-400 font-semibold mb-5 text-sm sm:text-base">${state.lastNightSummary}</p>
+
+                    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 mb-5 text-left space-y-2.5 text-xs sm:text-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">บทบาทของคุณ:</span>
+                            <span class="font-bold text-white uppercase">${state.currentUser.role}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">สถานะผลลัพธ์:</span>
+                            <span class="font-bold ${state.currentUser.finalResult === 'ชนะ' ? 'text-green-400' : 'text-red-400'}">${state.currentUser.finalResult}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">คะแนนรอบนี้:</span>
+                            <span class="font-bold text-amber-400">+${state.currentUser.finalResult === 'ชนะ' ? state.settings.winPoints : state.settings.lossPoints} คะแนน</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2.5 justify-center">
+                        <button onclick="restartNewGame()" class="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-6 py-3 rounded-xl transition text-sm glow-gold">
+                            <i class="fa-solid fa-rotate-right mr-2"></i> เล่นรอบใหม่
+                        </button>
+                        <button onclick="openScoreboard()" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 border border-slate-700 text-gray-200 px-6 py-3 rounded-xl transition text-sm">
+                            <i class="fa-solid fa-trophy mr-2"></i> ตารางคะแนน
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function openScoreboard() {
+            state.view = 'score_board';
+            render();
+        }
+
+        function renderScoreboardScreen() {
+            const scoreArr = Object.entries(state.scores).map(([code, data]) => ({ code, ...data }));
+            scoreArr.sort((a, b) => b.totalScore - a.totalScore);
+
+            return `
+            <div class="flex-1 max-w-2xl mx-auto w-full flex flex-col py-4">
+                <div class="bg-werewolf-card border border-werewolf-border rounded-3xl p-4 sm:p-7 glow-blue flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                            <div class="flex items-center space-x-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                                    <i class="fa-solid fa-medal text-lg"></i>
+                                </div>
+                                <h3 class="text-base sm:text-lg font-bold text-white">ตารางคะแนนสะสมผู้เล่น</h3>
+                            </div>
+                            <button onclick="goToLobby()" class="text-xs bg-slate-800 hover:bg-slate-700 text-gray-300 px-3 py-1.5 rounded-xl border border-slate-700">
+                                <i class="fa-solid fa-arrow-left mr-1"></i> กลับหน้าหลัก
+                            </button>
+                        </div>
+
+                        <div class="space-y-2.5 overflow-y-auto max-h-[360px] pr-1">
+                            ${scoreArr.length === 0 ? `
+                                <div class="text-center py-10 text-gray-500 text-xs">
+                                    <i class="fa-solid fa-trophy-slash text-3xl mb-2 opacity-40"></i>
+                                    <p>ยังไม่มีประวัติคะแนนสะสมในระบบ</p>
+                                </div>
+                            ` : scoreArr.map((s, idx) => `
+                                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 flex items-center justify-between text-xs">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-amber-400">
+                                            #${idx + 1}
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-white text-sm">${s.name}</h4>
+                                            <div class="text-[10px] text-gray-400">รหัส: ${s.code} | เล่น: ${s.played} | ชนะ: ${s.wins}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-extrabold text-amber-400">${s.totalScore}</div>
+                                        <div class="text-[9px] text-gray-500">คะแนนรวม</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-3 border-t border-slate-800 text-[11px] text-gray-500 text-center">
+                        คะแนนสะสมจัดเก็บข้ามรอบเกมโดยอัตโนมัติ
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function openAdminLogin() {
+            const pwd = prompt("กรุณากรอกรหัสผ่านผู้ดูแลระบบ (ค่าเริ่มต้น: toy@2532):");
+            if (pwd === state.adminPassword) {
+                state.view = 'admin_panel';
+                render();
+            } else if (pwd !== null) {
+                showModal("รหัสผ่านผู้ดูแลระบบไม่ถูกต้อง!");
+            }
+        }
+
+        function renderAdminPanelScreen() {
+            return `
+            <div class="flex-1 max-w-3xl mx-auto w-full flex flex-col py-4">
+                <div class="bg-werewolf-card border border-werewolf-border rounded-3xl p-4 sm:p-7 glow-gold flex flex-col">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                                <i class="fa-solid fa-user-shield text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-base sm:text-lg font-bold text-white">หน้าควบคุมผู้ดูแลระบบ</h3>
+                                <p class="text-[10px] text-gray-400">จัดการรหัสผู้เล่นทั้ง 10 รหัส และรหัสผ่านแอดมิน</p>
+                            </div>
+                        </div>
+                        <button onclick="goToLobby()" class="bg-slate-800 hover:bg-slate-700 text-gray-300 px-3 py-1.5 rounded-xl text-xs border border-slate-700">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> กลับ
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[420px] pr-1">
+                        <!-- Left: Codes -->
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+                            <h4 class="font-bold text-white text-xs mb-2.5 flex items-center space-x-2">
+                                <i class="fa-solid fa-key text-amber-400"></i>
+                                <span>รหัสผู้เล่น 6 หลักทั้ง 10 รหัส</span>
+                            </h4>
+                            <div class="space-y-2 mb-3 max-h-[200px] overflow-y-auto pr-1">
+                                ${GAME_CODES.map((c, idx) => `
+                                <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                                    <div>
+                                        <span class="text-gray-500 mr-1.5">#${idx+1}</span>
+                                        <span class="font-mono font-bold text-amber-400 tracking-wider">${c.code}</span>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] ${c.used ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-green-500/20 text-green-400 border border-green-500/30'}">
+                                        ${c.used ? `ใช้งาน (${c.player || 'ผู้เล่น'})` : 'ว่าง'}
+                                    </span>
+                                </div>`).join('')}
+                            </div>
+                            <button onclick="resetAllCodes()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 py-2 rounded-xl text-xs font-semibold transition">
+                                <i class="fa-solid fa-rotate mr-1"></i> รีเซ็ตสถานะรหัสทั้งหมด
+                            </button>
+                        </div>
+
+                        <!-- Right: Settings -->
+                        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3.5 text-xs">
+                            <h4 class="font-bold text-white mb-2 flex items-center space-x-2">
+                                <i class="fa-solid fa-shield-halved text-amber-400"></i>
+                                <span>ตั้งค่ารหัสผ่านแอดมิน</span>
+                            </h4>
+
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-300 mb-1">รหัสผ่านปัจจุบัน</label>
+                                <input type="text" id="adminNewPasswordInput" value="${state.adminPassword}"
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs">
+                            </div>
+                            <button onclick="updateAdminPassword()" class="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 py-2 rounded-xl font-semibold transition">
+                                บันทึกรหัสผ่านใหม่
+                            </button>
+
+                            <div class="pt-2.5 border-t border-slate-800 space-y-2">
+                                <button onclick="resetAllScores()" class="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 py-2 rounded-xl font-semibold transition">
+                                    <i class="fa-solid fa-trash-can mr-1"></i> รีเซ็ตคะแนนสะสมทั้งหมด
+                                </button>
+                                <button onclick="goToLobby()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 py-2.5 rounded-xl font-bold transition">
+                                    กลับสู่เกม
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function updateAdminPassword() {
+            const val = document.getElementById('adminNewPasswordInput').value.trim();
+            if (!val) {
+                showModal("รหัสผ่านผู้ดูแลต้องไม่ว่างเปล่า");
+                return;
+            }
+            state.adminPassword = val;
+            showModal("อัปเดตและบันทึกรหัสผ่านผู้ดูแลระบบเรียบร้อยแล้ว");
+        }
+
+        function resetAllCodes() {
+            GAME_CODES.forEach(c => { c.used = false; c.player = null; });
+            showModal("รีเซ็ตสถานะรหัสผู้เล่นทั้ง 10 รหัสเรียบร้อยแล้ว");
+        }
+
+        function resetAllScores() {
+            if (confirm("คุณแน่ใจหรือไม่ที่จะรีเซ็ตคะแนนสะสมทั้งหมด?")) {
+                state.scores = {};
+                showModal("รีเซ็ตคะแนนสะสมผู้เล่นทั้งหมดเรียบร้อยแล้ว");
+            }
+        }
+
+        function goToLobby() {
+            state.view = 'lobby_login';
+            render();
+        }
+
+        function restartNewGame() {
+            state.currentUser.status = 'อยู่ในห้องรอ';
+            state.currentUser.isReady = false;
+            state.currentUser.role = null;
+            state.players.forEach(p => {
+                p.status = 'ยังมีชีวิต';
+                p.isReady = true;
+            });
+            state.view = 'waiting_room';
+            render();
+        }
+
+        window.onload = function() {
+            render();
+        };
+    </script>
+</body>
+</html>
