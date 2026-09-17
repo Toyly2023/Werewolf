@@ -71,8 +71,8 @@
 
     <script>
         let state = {
-            view: 'lobby_login', // 'lobby_login', 'register_view', 'waiting_room', 'role_screen', 'game_board', 'admin_panel', 'score_board', 'summary_screen'
-            currentUser: null, // { username: '', pin: '', role: '', status: '', isReady: false }
+            view: 'lobby_login', 
+            currentUser: null, 
             players: [
                 { id: 1, name: "บอส (AI)", username: "BossAI", role: "werewolf", faction: "werewolf", status: "ยังมีชีวิต", isReady: true, isBot: true },
                 { id: 2, name: "มิน (AI)", username: "MinAI", role: "seer", faction: "villager", status: "ยังมีชีวิต", isReady: true, isBot: true },
@@ -107,6 +107,16 @@
             return { timeString, hour, isDaytime };
         }
 
+        // ระบบซิงค์ผู้เล่นออนไลน์เข้าสู่เซิร์ฟเวอร์กลาง (Shared Room Session)
+        function syncOnlinePlayers(currentUser) {
+            let onlineList = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
+            if (currentUser && !onlineList.some(p => p.username === currentUser.username)) {
+                onlineList.push(currentUser);
+                localStorage.setItem('werewolf_online_room', JSON.stringify(onlineList));
+            }
+            return onlineList;
+        }
+
         // ระบบบันทึกข้อมูลอัตโนมัติ (Auto-Save Game State)
         function autoSaveGame() {
             if (!state.currentUser) return;
@@ -122,7 +132,7 @@
             localStorage.setItem('werewolf_saved_session', JSON.stringify(gameStateObj));
         }
 
-        // ระบบบันทึกผู้ใช้งานลง Server Database (Mock Server DB with Unique Username & 4-digit PIN)
+        // ระบบสมัคร/เข้าสู่ระบบด้วย Username และ PIN 4 หลัก
         function registerOrLoginUser(username, pin, isRegister = false) {
             return new Promise((resolve, reject) => {
                 setTimeout(() => {
@@ -146,7 +156,6 @@
                         localStorage.setItem('werewolf_server_users_db', JSON.stringify(serverDB));
                         resolve(serverDB[username]);
                     } else {
-                        // Login
                         if (!serverDB[username]) {
                             return reject("ไม่พบชื่อผู้ใช้งานนี้ในระบบ กรุณาสร้างบัญชีก่อน");
                         }
@@ -196,6 +205,7 @@
                 state.lastNightSummary = parsed.lastNightSummary;
 
                 if (state.currentUser) {
+                    syncOnlinePlayers(state.currentUser);
                     if (state.gamePhase === 'waiting') {
                         state.view = 'waiting_room';
                     } else if (state.gamePhase === 'ended') {
@@ -276,7 +286,7 @@
                     ${state.currentUser ? `
                         <div class="bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl flex items-center space-x-2 text-xs">
                             <span class="w-2 h-2 rounded-full ${state.currentUser.status === 'ยังมีชีวิต' || state.currentUser.status === 'กำลังเล่น' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}"></span>
-                            <span class="font-medium text-gray-200">${state.currentUser.name || state.currentUser.username}</span>
+                            <span class="font-medium text-gray-200">@${state.currentUser.username}</span>
                             <span class="bg-slate-900 px-2 py-0.5 rounded text-amber-400 border border-slate-700">${state.currentUser.status}</span>
                         </div>
                     ` : `
@@ -422,15 +432,19 @@
 
         function renderPublicPlayerList() {
             let listHtml = '';
+            // รวมผู้เล่นจริงจากเซิร์ฟเวอร์กลาง (online room) และ AI บอทเข้าด้วยกัน
+            let onlineUsers = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
             let allParticipants = [...state.players];
-            if (state.currentUser) {
-                allParticipants.push({
-                    name: state.currentUser.name || state.currentUser.username,
-                    username: state.currentUser.username,
-                    status: state.currentUser.status,
-                    isCurrent: true
-                });
-            }
+            
+            onlineUsers.forEach(u => {
+                if (!allParticipants.some(p => p.username === u.username)) {
+                    allParticipants.push({
+                        username: u.username,
+                        status: u.status || 'อยู่ในห้องรอ',
+                        isCurrent: state.currentUser && state.currentUser.username === u.username
+                    });
+                }
+            });
 
             if (allParticipants.length === 0) {
                 return `<div class="col-span-2 text-center py-8 text-gray-500 text-xs">ยังไม่มีผู้เล่นในระบบ</div>`;
@@ -440,6 +454,7 @@
                 const isAlive = p.status === 'ยังมีชีวิต' || p.status === 'อยู่ในห้องรอ' || p.status === 'กำลังเล่น' || p.status === 'พร้อมแล้ว';
                 const statusColor = isAlive ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400';
                 const icon = isAlive ? 'fa-heart-pulse' : 'fa-skull';
+                const isMe = state.currentUser && state.currentUser.username === p.username;
 
                 listHtml += `
                 <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs">
@@ -449,10 +464,10 @@
                         </div>
                         <div>
                             <div class="font-semibold text-gray-200 flex items-center space-x-1.5">
-                                <span>${p.name || p.username}</span>
-                                ${p.isCurrent ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded">คุณ</span>' : ''}
+                                <span>@${p.username}</span>
+                                ${isMe ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded">คุณ</span>' : ''}
                             </div>
-                            <div class="text-[10px] text-gray-400">ID: @${p.username}</div>
+                            <div class="text-[10px] text-gray-400">${p.isBot ? 'ระบบ AI บอท' : 'ผู้เล่นออนไลน์'}</div>
                         </div>
                     </div>
                     <div class="px-2 py-0.5 rounded-lg border text-[11px] flex items-center space-x-1 ${statusColor}">
@@ -466,8 +481,20 @@
         }
 
         function renderWaitingRoomScreen() {
-            const totalCount = state.players.length + 1;
-            const readyCount = state.players.filter(p => p.isReady).length + (state.currentUser.isReady ? 1 : 0);
+            let onlineUsers = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
+            let allWaitingPlayers = [...state.players];
+            onlineUsers.forEach(u => {
+                if (!allWaitingPlayers.some(p => p.username === u.username)) {
+                    allWaitingPlayers.push({
+                        username: u.username,
+                        status: u.status || 'อยู่ในห้องรอ',
+                        isReady: u.isReady || false
+                    });
+                }
+            });
+
+            const totalCount = allWaitingPlayers.length;
+            const readyCount = allWaitingPlayers.filter(p => p.isReady).length;
             const canStart = totalCount >= 6;
 
             return `
@@ -526,30 +553,15 @@
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 overflow-y-auto max-h-[360px] pr-1">
-                        <div class="bg-slate-900/90 border border-amber-500/40 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs shadow-md">
-                            <div class="flex items-center space-x-2.5">
-                                <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400">
-                                    คุณ
-                                </div>
-                                <div>
-                                    <div class="font-semibold text-white">@${state.currentUser.username}</div>
-                                    <div class="text-[10px] text-gray-400">ผู้เล่นหลัก</div>
-                                </div>
-                            </div>
-                            <div class="px-2 py-0.5 rounded-lg border text-[11px] font-semibold ${state.currentUser.isReady ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}">
-                                ${state.currentUser.isReady ? 'พร้อมแล้ว' : 'ยังไม่พร้อม'}
-                            </div>
-                        </div>
-
-                        ${state.players.map((p, idx) => `
+                        ${allWaitingPlayers.map((p, idx) => `
                         <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs">
                             <div class="flex items-center space-x-2.5">
                                 <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-gray-400">
                                     #${idx + 1}
                                 </div>
                                 <div>
-                                    <div class="font-semibold text-gray-200">${p.name || p.username}</div>
-                                    <div class="text-[10px] text-gray-400">ID: @${p.username}</div>
+                                    <div class="font-semibold text-gray-200">@${p.username} ${p.username === state.currentUser.username ? '(คุณ)' : ''}</div>
+                                    <div class="text-[10px] text-gray-400">${p.isBot ? 'ระบบ AI Bot' : 'ผู้เล่นออนไลน์'}</div>
                                 </div>
                             </div>
                             <div class="px-2 py-0.5 rounded-lg border text-[11px] font-semibold ${p.isReady ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}">
@@ -856,6 +868,7 @@
                     isReady: false,
                     score: 0
                 };
+                syncOnlinePlayers(state.currentUser);
                 state.view = 'waiting_room';
                 render();
             } catch (err) {
@@ -885,6 +898,12 @@
         function toggleReady() {
             state.currentUser.isReady = !state.currentUser.isReady;
             state.currentUser.status = state.currentUser.isReady ? 'พร้อมแล้ว' : 'ยังไม่พร้อม';
+            
+            // อัปเดตสถานะในห้องออนไลน์กลาง
+            let onlineList = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
+            onlineList = onlineList.map(u => u.username === state.currentUser.username ? { ...u, status: state.currentUser.status, isReady: state.currentUser.isReady } : u);
+            localStorage.setItem('werewolf_online_room', JSON.stringify(onlineList));
+
             checkAutoStart();
             render();
         }
@@ -913,15 +932,17 @@
         }
 
         function checkAutoStart() {
-            const allPlayers = [state.currentUser, ...state.players];
-            const allReady = allPlayers.every(p => p.isReady);
-            if (allReady && allPlayers.length >= 6) {
+            let onlineList = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
+            const allParticipants = [...onlineList, ...state.players];
+            const allReady = allParticipants.every(p => p.isReady);
+            if (allReady && allParticipants.length >= 6) {
                  startGameProcess();
             }
         }
 
         function forceStartGame() {
-            const total = state.players.length + 1;
+            let onlineList = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
+            const total = onlineList.length + state.players.length;
             if (total < 6) {
                 showModal("ต้องการผู้เล่นอย่างน้อย 6 คนจึงจะเริ่มเกมได้ (ปัจจุบันมี " + total + " คน)");
                 return;
@@ -930,7 +951,8 @@
         }
 
         function startGameProcess() {
-            const allParticipants = [state.currentUser, ...state.players];
+            let onlineList = JSON.parse(localStorage.getItem('werewolf_online_room') || '[]');
+            const allParticipants = [...onlineList, ...state.players];
             const total = allParticipants.length;
 
             let rolesPool = ['werewolf', 'werewolf', 'seer', 'doctor'];
@@ -942,8 +964,9 @@
             state.currentUser.role = rolesPool[0];
             state.currentUser.status = 'กำลังเล่น';
             
-            state.players.forEach((p, idx) => {
-                p.role = rolesPool[idx + 1];
+            let assignedIndex = 1;
+            state.players.forEach((p) => {
+                p.role = rolesPool[assignedIndex++];
                 p.status = 'ยังมีชีวิต';
             });
 
@@ -1277,7 +1300,8 @@
         function resetAllUsers() {
             if (confirm("คุณแน่ใจหรือไม่ที่จะล้างข้อมูลบัญชีผู้ใช้ทั้งหมดในเซิร์ฟเวอร์?")) {
                 localStorage.removeItem('werewolf_server_users_db');
-                showModal("ล้างข้อมูลสมาชิกทั้งหมดเรียบร้อยแล้ว");
+                localStorage.removeItem('werewolf_online_room');
+                showModal("ล้างข้อมูลสมาชิกและห้องออนไลน์ทั้งหมดเรียบร้อยแล้ว");
             }
         }
 
@@ -1307,11 +1331,20 @@
 
         window.onload = function() {
             render();
+            
+            // อัปเดตหน้าจอและดึงสถานะผู้เล่นออนไลน์ทุกๆ 2 วินาที (ซิงค์ห้องเดียวกัน)
             setInterval(() => {
-                if (state.view === 'game_board') {
+                if (state.currentUser && (state.view === 'waiting_room' || state.view === 'game_board')) {
                     render();
                 }
-            }, 1000);
+            }, 2000);
+
+            // บันทึกข้อมูลเกมอัตโนมัติทุกๆ 10 วินาที
+            setInterval(() => {
+                if (state.currentUser) {
+                    autoSaveGame();
+                }
+            }, 10000);
         };
     </script>
 </body>
