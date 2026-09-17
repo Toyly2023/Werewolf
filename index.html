@@ -97,7 +97,8 @@
             dayNumber: 1,
             nightActions: { werewolfTarget: null, seerTarget: null, doctorTarget: null },
             lastNightSummary: "ยินดีต้อนรับสู่เกม Werewolf (ประเทศไทย)",
-            adminPassword: "toyly2532", // ตั้งค่ารหัสผ่านผู้ดูแลเป็น toyly2532 แล้ว[cite: 2]
+            adminPassword: "toyly2532",
+            gameId: 'WLF-START',
             settings: {
                 aliveText: "ยังมีชีวิต",
                 deadText: "ออกจากเกมแล้ว",
@@ -108,6 +109,60 @@
             scores: {},
             modalMessage: null
         };
+
+        // ระบบบันทึกสถานะเกมค้างไว้ (Persistence / Game State Save & Load)
+        function generateGameId() {
+            return 'WLF-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        function saveGameState() {
+            const gameStateObj = {
+                gameId: state.gameId || generateGameId(),
+                dayNumber: state.dayNumber,
+                gamePhase: state.gamePhase,
+                players: state.players,
+                currentUser: state.currentUser,
+                lastNightSummary: state.lastNightSummary,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem('werewolf_saved_session', JSON.stringify(gameStateObj));
+            showModal("บันทึกสถานะเกม (Game ID: " + gameStateObj.gameId + ") เรียบร้อยแล้ว สามารถเปิดกลับมาเล่นต่อได้ทันที!");
+        }
+
+        function loadGameState() {
+            const savedData = localStorage.getItem('werewolf_saved_session');
+            if (!savedData) {
+                showModal("ไม่พบข้อมูลเกมที่บันทึกไว้ในระบบ");
+                return false;
+            }
+            try {
+                const parsed = JSON.parse(savedData);
+                state.gameId = parsed.gameId;
+                state.dayNumber = parsed.dayNumber;
+                state.gamePhase = parsed.gamePhase;
+                state.players = parsed.players;
+                state.currentUser = parsed.currentUser;
+                state.lastNightSummary = parsed.lastNightSummary;
+
+                if (state.currentUser) {
+                    if (state.gamePhase === 'waiting') {
+                        state.view = 'waiting_room';
+                    } else if (state.gamePhase === 'ended') {
+                        state.view = 'summary_screen';
+                    } else {
+                        state.view = 'game_board';
+                    }
+                } else {
+                    state.view = 'lobby_login';
+                }
+                render();
+                showModal("โหลดข้อมูลเกม (Game ID: " + state.gameId + ") สำเร็จ!");
+                return true;
+            } catch (err) {
+                showModal("เกิดข้อผิดพลาดในการโหลดข้อมูลเกม");
+                return false;
+            }
+        }
 
         function showModal(msg) {
             state.modalMessage = msg;
@@ -150,7 +205,7 @@
                         </div>
                         <div>
                             <h1 class="text-lg sm:text-xl font-bold tracking-wider text-amber-400">WEREWOLF</h1>
-                            <p class="text-[10px] text-gray-400">เกมล่าปริศนามนุษย์หมาป่า</p>
+                            <p class="text-[10px] text-gray-400">เกมล่าปริศนามนุษย์หมาป่า (ID: ${state.gameId || 'WLF-001'})</p>
                         </div>
                     </div>
                     <div class="flex sm:hidden items-center space-x-2">
@@ -175,6 +230,15 @@
                             <i class="fa-solid fa-user-slash mr-1"></i> ยังไม่เข้าสู่ระบบ
                         </div>
                     `}
+                    
+                    <button onclick="saveGameState()" class="hidden sm:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 px-3 py-1.5 rounded-xl text-xs transition items-center space-x-1" title="บันทึกเกม">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>บันทึกเกม</span>
+                    </button>
+                    <button onclick="loadGameState()" class="hidden sm:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-400 px-3 py-1.5 rounded-xl text-xs transition items-center space-x-1" title="โหลดเกม">
+                        <i class="fa-solid fa-cloud-arrow-down"></i>
+                        <span>โหลดเกมต่อ</span>
+                    </button>
                     
                     <button onclick="openAdminLogin()" class="hidden sm:flex bg-slate-800 hover:bg-slate-700 border border-slate-700 text-gray-300 px-3 py-1.5 rounded-xl text-xs transition items-center space-x-1">
                         <i class="fa-solid fa-gear text-amber-400"></i>
@@ -562,7 +626,7 @@
                                 <i class="fa-solid ${isNight ? 'fa-moon' : 'fa-sun'}"></i>
                             </div>
                             <div>
-                                <div class="text-[10px] text-gray-400">วันที่ ${state.dayNumber}</div>
+                                <div class="text-[10px] text-gray-400">วันที่ ${state.dayNumber} (Game ID: ${state.gameId})</div>
                                 <h3 class="text-sm sm:text-base font-bold text-white">
                                     ${isNight ? '🌙 เวลากลางคืน (19:00 - 05:59)' : '☀️ เวลากลางวัน (06:00 - 18:59)'}
                                 </h3>
@@ -779,6 +843,7 @@
                 isReady: false,
                 score: 0
             };
+            state.gameId = generateGameId();
 
             state.view = 'waiting_room';
             render();
@@ -1116,7 +1181,7 @@
                             </div>
                             <div>
                                 <h3 class="text-base sm:text-lg font-bold text-white">หน้าควบคุมผู้ดูแลระบบ</h3>
-                                <p class="text-[10px] text-gray-400">จัดการรหัสผู้เล่นทั้ง 10 รหัส และรหัสผ่านแอดมิน</p>
+                                <p class="text-[10px] text-gray-400">จัดการรหัสผู้เล่นทั้ง 10 รหัส และรหัสผ่านแอดมิน (Game ID: ${state.gameId})</p>
                             </div>
                         </div>
                         <button onclick="goToLobby()" class="bg-slate-800 hover:bg-slate-700 text-gray-300 px-3 py-1.5 rounded-xl text-xs border border-slate-700">
@@ -1221,4 +1286,3 @@
     </script>
 </body>
 </html>
-```[cite: 2]
